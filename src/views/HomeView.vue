@@ -1,10 +1,12 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { db, getSetting } from '../db'
 
 const todayPointages = ref([])
 const weekPointages = ref([])
 const weeklyHours = ref(35)
+const now = ref(Date.now())
+let timerInterval = null
 
 function getMonday(d) {
   const date = new Date(d)
@@ -37,7 +39,7 @@ function computeWorkedMs(entries) {
     total += sorted[i + 1].timestamp - sorted[i].timestamp
   }
   if (sorted.length % 2 === 1) {
-    total += Date.now() - sorted[sorted.length - 1].timestamp
+    total += now.value - sorted[sorted.length - 1].timestamp
   }
   return total
 }
@@ -78,6 +80,14 @@ onMounted(async () => {
   weekPointages.value = await db.pointages.where('date').anyOf(dates).toArray()
 
   weeklyHours.value = await getSetting('weeklyHours', 35)
+
+  timerInterval = setInterval(() => {
+    now.value = Date.now()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (timerInterval) clearInterval(timerInterval)
 })
 </script>
 

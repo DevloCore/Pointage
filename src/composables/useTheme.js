@@ -19,6 +19,10 @@ function applyTheme(value) {
   }
 }
 
+function onSystemThemeChange() {
+  if (theme.value === 'system') applyTheme('system')
+}
+
 export function useTheme() {
   onMounted(async () => {
     if (!initialized) {
@@ -27,9 +31,7 @@ export function useTheme() {
       applyTheme(saved)
       initialized = true
 
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (theme.value === 'system') applyTheme('system')
-      })
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onSystemThemeChange)
     }
   })
 
