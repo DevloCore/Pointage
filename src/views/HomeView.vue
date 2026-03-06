@@ -5,6 +5,7 @@ import { db, getSetting } from '../db'
 const todayPointages = ref([])
 const weekPointages = ref([])
 const weeklyHours = ref(35)
+const workDays = ref([1, 2, 3, 4, 5])
 const now = ref(Date.now())
 let timerInterval = null
 
@@ -66,6 +67,57 @@ const lastPointage = computed(() => {
   return sorted[0]
 })
 
+// Delta semaine: calculate the difference between actual worked time and expected time
+// for each day that has already passed (or is in progress) this week
+const weekDelta = computed(() => {
+  const nbWorkDays = workDays.value.length
+  if (nbWorkDays === 0) return 0
+
+  const dailyExpectedMs = (weeklyHours.value / nbWorkDays) * 3600000
+  const monday = getMonday(new Date())
+  const today = new Date()
+  const todayStr = formatDate(today)
+
+  let totalExpected = 0
+  let totalWorked = 0
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(d.getDate() + i)
+    const dateStr = formatDate(d)
+    const dayOfWeek = d.getDay()
+
+    // Only count work days that have passed or are today
+    if (dateStr > todayStr) break
+    if (!workDays.value.includes(dayOfWeek)) continue
+
+    totalExpected += dailyExpectedMs
+
+    // Get pointages for this day
+    const dayEntries = weekPointages.value.filter(p => p.date === dateStr)
+    const sorted = [...dayEntries].sort((a, b) => a.timestamp - b.timestamp)
+    let dayWorked = 0
+    for (let j = 0; j < sorted.length - 1; j += 2) {
+      dayWorked += sorted[j + 1].timestamp - sorted[j].timestamp
+    }
+    // If currently working (odd entries on today)
+    if (dateStr === todayStr && sorted.length % 2 === 1) {
+      dayWorked += now.value - sorted[sorted.length - 1].timestamp
+    }
+    totalWorked += dayWorked
+  }
+
+  return totalWorked - totalExpected
+})
+
+function formatDelta(ms) {
+  const absMs = Math.abs(ms)
+  const hours = Math.floor(absMs / 3600000)
+  const minutes = Math.floor((absMs % 3600000) / 60000)
+  const sign = ms >= 0 ? '+' : '-'
+  return `${sign}${hours}h ${String(minutes).padStart(2, '0')}min`
+}
+
 onMounted(async () => {
   const today = formatDate(new Date())
   todayPointages.value = await db.pointages.where('date').equals(today).toArray()
@@ -80,6 +132,7 @@ onMounted(async () => {
   weekPointages.value = await db.pointages.where('date').anyOf(dates).toArray()
 
   weeklyHours.value = await getSetting('weeklyHours', 35)
+  workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
 
   timerInterval = setInterval(() => {
     now.value = Date.now()
@@ -133,6 +186,20 @@ onUnmounted(() => {
           />
         </div>
       </div>
+    </div>
+
+    <!-- Delta semaine -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">
+      <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Delta semaine</h2>
+      <p
+        class="text-3xl font-bold"
+        :class="weekDelta >= 0 ? 'text-green-500' : 'text-red-500'"
+      >
+        {{ formatDelta(weekDelta) }}
+      </p>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        {{ weekDelta >= 0 ? 'En avance sur le planning' : 'En retard sur le planning' }}
+      </p>
     </div>
 
     <!-- Quick action -->

@@ -1,9 +1,11 @@
 <script setup>
+import { ref, watch } from 'vue'
 import { useTheme } from './composables/useTheme'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 useTheme()
 const route = useRoute()
+const router = useRouter()
 
 const navItems = [
   { to: '/', label: 'Accueil', icon: 'home' },
@@ -11,11 +13,24 @@ const navItems = [
   { to: '/history', label: 'Historique', icon: 'list' },
   { to: '/settings', label: 'Paramètres', icon: 'settings' }
 ]
+
+const navOrder = { '/': 0, '/pointage': 1, '/history': 2, '/settings': 3 }
+const transitionName = ref('slide-left')
+
+watch(() => route.path, (to, from) => {
+  const toIndex = navOrder[to] ?? 0
+  const fromIndex = navOrder[from] ?? 0
+  transitionName.value = toIndex >= fromIndex ? 'slide-left' : 'slide-right'
+})
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 pb-20 transition-colors">
-    <router-view />
+    <router-view v-slot="{ Component, route: currentRoute }">
+      <transition :name="transitionName" mode="out-in">
+        <component :is="Component" :key="currentRoute.path" />
+      </transition>
+    </router-view>
 
     <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-bottom">
       <div class="flex justify-around items-center h-16 max-w-lg mx-auto">
@@ -51,3 +66,30 @@ const navItems = [
     </nav>
   </div>
 </template>
+
+<style scoped>
+.slide-left-enter-active,
+.slide-left-leave-active,
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.slide-left-enter-from {
+  opacity: 0;
+  transform: translateX(30px);
+}
+.slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+.slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+</style>

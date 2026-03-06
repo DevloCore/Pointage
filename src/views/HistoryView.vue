@@ -77,11 +77,22 @@ const groupedEntries = computed(() => {
     groups[entry.date].push(entry)
   }
   const sorted = Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
-  return sorted.map(([date, entries]) => ({
-    date,
-    label: formatDateLabel(date),
-    entries: entries.sort((a, b) => a.timestamp - b.timestamp)
-  }))
+  return sorted.map(([date, entries]) => {
+    const sortedEntries = entries.sort((a, b) => a.timestamp - b.timestamp)
+    const pairs = []
+    for (let i = 0; i < sortedEntries.length; i += 2) {
+      pairs.push({
+        start: sortedEntries[i],
+        end: sortedEntries[i + 1] || null
+      })
+    }
+    return {
+      date,
+      label: formatDateLabel(date),
+      entries: sortedEntries,
+      pairs
+    }
+  })
 })
 
 function computeWorkedMs(entries) {
@@ -229,31 +240,67 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow divide-y divide-gray-100 dark:divide-gray-700">
-        <div v-for="entry in group.entries" :key="entry.id" class="px-4 py-3">
-          <!-- View mode -->
-          <div v-if="editingId !== entry.id" class="flex items-center justify-between">
-            <span class="font-mono text-lg">{{ formatTime(entry.timestamp) }}</span>
+        <div v-for="(pair, pairIndex) in group.pairs" :key="pairIndex" class="px-4 py-3">
+          <!-- Pair view: start → end -->
+          <div v-if="editingId !== pair.start.id && (pair.end === null || editingId !== pair.end.id)" class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-lg">{{ formatTime(pair.start.timestamp) }}</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+              <span v-if="pair.end" class="font-mono text-lg">{{ formatTime(pair.end.timestamp) }}</span>
+              <span v-else class="text-sm font-medium text-green-500 animate-pulse">En cours</span>
+            </div>
             <div class="flex gap-2">
-              <button @click="startEdit(entry)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm transition-colors">
+              <button @click="startEdit(pair.start)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm transition-colors">
                 Modifier
               </button>
-              <button @click="deleteEntry(entry.id)" class="text-red-500 hover:text-red-700 text-sm transition-colors">
+              <button @click="deleteEntry(pair.start.id)" class="text-red-500 hover:text-red-700 text-sm transition-colors">
                 Supprimer
               </button>
             </div>
           </div>
 
-          <!-- Edit mode -->
-          <div v-else class="flex items-center gap-3">
-            <select v-model.number="editHour" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option v-for="h in hours" :key="h" :value="h">{{ String(h).padStart(2, '0') }}</option>
-            </select>
-            <span class="font-bold">:</span>
-            <select v-model.number="editMinute" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option v-for="m in minutes" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
-            </select>
-            <button @click="saveEdit(entry)" class="text-green-500 hover:text-green-700 text-sm font-medium transition-colors">OK</button>
-            <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">✕</button>
+          <!-- Edit mode for start entry -->
+          <div v-else-if="editingId === pair.start.id" class="space-y-2">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 w-12">Début</span>
+              <select v-model.number="editHour" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option v-for="h in hours" :key="h" :value="h">{{ String(h).padStart(2, '0') }}</option>
+              </select>
+              <span class="font-bold">:</span>
+              <select v-model.number="editMinute" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option v-for="m in minutes" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
+              </select>
+              <button @click="saveEdit(pair.start)" class="text-green-500 hover:text-green-700 text-sm font-medium transition-colors">OK</button>
+              <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">✕</button>
+            </div>
+          </div>
+
+          <!-- Edit mode for end entry -->
+          <div v-else-if="pair.end && editingId === pair.end.id" class="space-y-2">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 w-12">Fin</span>
+              <select v-model.number="editHour" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option v-for="h in hours" :key="h" :value="h">{{ String(h).padStart(2, '0') }}</option>
+              </select>
+              <span class="font-bold">:</span>
+              <select v-model.number="editMinute" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option v-for="m in minutes" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
+              </select>
+              <button @click="saveEdit(pair.end)" class="text-green-500 hover:text-green-700 text-sm font-medium transition-colors">OK</button>
+              <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">✕</button>
+            </div>
+          </div>
+
+          <!-- Actions for end entry (shown below pair when not editing) -->
+          <div v-if="pair.end && editingId !== pair.start.id && editingId !== pair.end.id" class="flex gap-2 mt-1 justify-end">
+            <button @click="startEdit(pair.end)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs transition-colors">
+              Modifier fin
+            </button>
+            <button @click="deleteEntry(pair.end.id)" class="text-red-500 hover:text-red-700 text-xs transition-colors">
+              Supprimer fin
+            </button>
           </div>
         </div>
       </div>
