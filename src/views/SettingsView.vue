@@ -36,7 +36,7 @@ function toggleDay(day) {
   } else {
     workDays.value = [...workDays.value, day]
   }
-  setSetting('workDays', workDays.value)
+  setSetting('workDays', [...workDays.value])
 }
 
 const themeOptions = [
