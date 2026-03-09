@@ -6,6 +6,7 @@ import { useTheme } from '../composables/useTheme'
 const { theme } = useTheme()
 const weeklyHours = ref(35)
 const workDays = ref([1, 2, 3, 4, 5])
+const morningStartTime = ref('09:00')
 
 const dayLabels = [
   { value: 1, label: 'Lun' },
@@ -20,12 +21,19 @@ const dayLabels = [
 onMounted(async () => {
   weeklyHours.value = await getSetting('weeklyHours', 35)
   workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
+  morningStartTime.value = await getSetting('morningStartTime', '09:00')
 })
 
 watch(weeklyHours, async (val) => {
   const num = Number(val)
   if (!isNaN(num) && num >= 0) {
     await setSetting('weeklyHours', num)
+  }
+})
+
+watch(morningStartTime, async (val) => {
+  if (val) {
+    await setSetting('morningStartTime', val)
   }
 })
 
@@ -67,6 +75,27 @@ const themeOptions = [
           {{ opt.label }}
         </button>
       </div>
+    </div>
+
+    <!-- Morning start time -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">
+      <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Heure de début habituelle</h2>
+      <div class="flex items-center gap-4">
+        <label
+          for="morning-start-time"
+          class="text-sm font-medium text-gray-700 dark:text-gray-300 sr-only"
+        >Heure de début habituelle</label>
+        <input
+          id="morning-start-time"
+          v-model="morningStartTime"
+          type="time"
+          aria-label="Heure de début habituelle"
+          class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+        />
+      </div>
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+        Heure habituelle de votre première arrivée le matin. Par défaut : 09:00.
+      </p>
     </div>
 
     <!-- Weekly hours -->
