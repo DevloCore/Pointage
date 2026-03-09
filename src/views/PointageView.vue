@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { db } from '../db'
+import { ClockIcon, CheckCircleIcon } from '@heroicons/vue/24/outline'
 
 const step = ref('initial') // 'initial' | 'timePicker' | 'success'
 const pressing = ref(false)
@@ -57,9 +58,7 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
             class="pointage-btn"
             :class="{ 'pointage-btn-pressed': pressing }"
           >
-            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <ClockIcon class="w-12 h-12 mb-2" />
             <span class="text-lg font-bold tracking-wide">Pointer</span>
           </button>
         </div>
@@ -116,10 +115,7 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
     <transition name="fade" mode="out-in">
       <div v-if="step === 'success'" key="success" class="flex flex-col items-center">
         <div class="success-checkmark mb-6">
-          <svg class="w-24 h-24 text-green-500" viewBox="0 0 24 24" fill="none">
-            <circle class="circle-anim" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
-            <path class="check-anim" d="M8 12l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
+          <CheckCircleIcon class="w-24 h-24 text-green-500 success-icon" />
         </div>
         <p class="text-xl font-bold text-green-500">Pointage enregistré !</p>
         <p class="text-gray-500 dark:text-gray-400 mt-2 text-sm">
@@ -213,23 +209,21 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
     inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.circle-anim {
-  stroke-dasharray: 63;
-  stroke-dashoffset: 63;
-  animation: drawCircle 0.6s ease forwards;
+.success-icon {
+  animation: scaleIn 0.5s ease forwards;
 }
 
-.check-anim {
-  stroke-dasharray: 20;
-  stroke-dashoffset: 20;
-  animation: drawCheck 0.4s 0.5s ease forwards;
-}
-
-@keyframes drawCircle {
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes drawCheck {
-  to { stroke-dashoffset: 0; }
+@keyframes scaleIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>
