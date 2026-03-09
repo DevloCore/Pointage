@@ -11,6 +11,27 @@ const morningStartTime = ref('09:00')
 const now = ref(Date.now())
 let timerInterval = null
 
+// Variables pour stocker les contextes de sync
+let today = ''
+let weekDates = []
+
+// Handlers pour les événements de synchronisation
+const handlePointageUpdate = async () => {
+  if (today) {
+    todayPointages.value = await db.pointages.where('date').equals(today).toArray()
+  }
+  if (weekDates.length > 0) {
+    weekPointages.value = await db.pointages.where('date').anyOf(weekDates).toArray()
+  }
+}
+
+const handleSettingUpdate = async () => {
+  workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
+  weeklyHours.value = await getSetting('weeklyHours', 35)
+  dailyHours.value = weeklyHours.value / workDays.value.length
+  morningStartTime.value = await getSetting('morningStartTime', '09:00')
+}
+
 function getMonday(d) {
   const date = new Date(d)
   const day = date.getDay()
@@ -163,22 +184,26 @@ function formatDelta(ms) {
 }
 
 onMounted(async () => {
-  const today = formatDate(new Date())
+  today = formatDate(new Date())
   todayPointages.value = await db.pointages.where('date').equals(today).toArray()
 
   const monday = getMonday(new Date())
   const sunday = new Date(monday)
   sunday.setDate(sunday.getDate() + 6)
-  const dates = []
+  weekDates = []
   for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate() + 1)) {
-    dates.push(formatDate(new Date(d)))
+    weekDates.push(formatDate(new Date(d)))
   }
-  weekPointages.value = await db.pointages.where('date').anyOf(dates).toArray()
+  weekPointages.value = await db.pointages.where('date').anyOf(weekDates).toArray()
 
   workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
   weeklyHours.value = await getSetting('weeklyHours', 35)
   dailyHours.value = weeklyHours.value / workDays.value.length
   morningStartTime.value = await getSetting('morningStartTime', '09:00')
+
+  // Écouter les changements en temps réel
+  window.addEventListener('pointage-updated', handlePointageUpdate)
+  window.addEventListener('setting-updated', handleSettingUpdate)
 
   timerInterval = setInterval(() => {
     now.value = Date.now()
@@ -187,6 +212,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
+  // Nettoyer les listeners
+  window.removeEventListener('pointage-updated', handlePointageUpdate)
+  window.removeEventListener('setting-updated', handleSettingUpdate)
 })
 </script>
 
@@ -217,7 +245,7 @@ onUnmounted(() => {
 	  <div class="mt-3">
         <div class="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
           <span>Progression</span>
-          <span>{{ dayProgress }}% de {{ dailyHours }}h</span>
+          <span>{{ dayProgress }}% de {{ dailyHours.toFixed(2).replace(/\.?0+$/, '') }}h</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
           <div
@@ -235,7 +263,7 @@ onUnmounted(() => {
       <div class="mt-3">
         <div class="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
           <span>Progression</span>
-          <span>{{ weekProgress }}% de {{ weeklyHours }}h</span>
+          <span>{{ weekProgress }}% de {{ weeklyHours.toFixed(2).replace(/\.?0+$/, '') }}h</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
           <div

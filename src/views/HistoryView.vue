@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { db } from '../db'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { db, addPointage, updatePointage, deletePointage } from '../db'
 import { 
   ClockIcon, 
   PencilSquareIcon, 
@@ -127,12 +127,12 @@ function startEdit(entry) {
 async function saveEdit(entry) {
   const d = new Date(entry.timestamp)
   d.setHours(editHour.value, editMinute.value, 0, 0)
-  await db.pointages.update(entry.id, {
+  await updatePointage(entry.id, {
     timestamp: d.getTime(),
     date: d.toISOString().split('T')[0]
   })
   editingId.value = null
-  await loadAll()
+  // Le refresh sera déclenché par loadAll via l'événement
 }
 
 function cancelEdit() {
@@ -140,8 +140,9 @@ function cancelEdit() {
 }
 
 async function deleteEntry(id) {
-  await db.pointages.delete(id)
-  await loadAll()
+  console.log('Suppression de l\'entrée:', id)
+  await deletePointage(id)
+  // Le refresh sera déclenché par l'événement 'pointage-updated'
 }
 
 function openAddForm() {
@@ -154,19 +155,30 @@ function openAddForm() {
 async function confirmAdd() {
   const d = new Date(addingDate.value + 'T00:00:00')
   d.setHours(addHour.value, addMinute.value, 0, 0)
-  await db.pointages.add({
+  await addPointage({
     timestamp: d.getTime(),
     date: addingDate.value
   })
   showAddForm.value = false
-  await loadAll()
+  // Le refresh sera déclenché par loadAll via l'événement
 }
 
 async function loadAll() {
   allPointages.value = await db.pointages.toArray()
+  console.log('Rechargement historique:', allPointages.value.length, 'pointages')
 }
 
-onMounted(loadAll)
+// Charger au démarrage
+onMounted(() => {
+  loadAll()
+  // Écouter les changements en temps réel
+  window.addEventListener('pointage-updated', loadAll)
+})
+
+// Nettoyer les listeners
+onUnmounted(() => {
+  window.removeEventListener('pointage-updated', loadAll)
+})
 
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)

@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { useTheme } from './composables/useTheme'
 import { useRoute, useRouter } from 'vue-router'
+import ToastContainer from './components/ToastContainer.vue'
 import {
   HomeIcon,
   ClockIcon,
@@ -32,6 +33,8 @@ watch(() => route.path, (to, from) => {
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 pb-20 transition-colors">
+    <ToastContainer />
+    
     <router-view v-slot="{ Component, route: currentRoute }">
       <transition :name="transitionName" mode="out-in">
         <component :is="Component" :key="currentRoute.path" />

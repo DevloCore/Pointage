@@ -13,6 +13,10 @@ dist-ssr
 *.local
 .vite
 
+# Environment variables
+.env
+.env.local
+
 # Capacitor native projects
 android
 ios

@@ -1,10 +1,13 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { getSetting, setSetting } from '../db'
 import { useTheme } from '../composables/useTheme'
-import { ComputerDesktopIcon, SunIcon, MoonIcon } from '@heroicons/vue/24/outline'
+import { useSync } from '../composables/useSync'
+import { ComputerDesktopIcon, SunIcon, MoonIcon, CloudIcon, ArrowPathIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/vue/24/outline'
 
 const { theme } = useTheme()
+const { isConfigured, isSyncing, lastSyncDate, syncError, fullSync } = useSync()
+
 const weeklyHours = ref(35)
 const workDays = ref([1, 2, 3, 4, 5])
 const morningStartTime = ref('09:00')
@@ -19,10 +22,20 @@ const dayLabels = [
   { value: 0, label: 'Dim' }
 ]
 
-onMounted(async () => {
+async function loadSettings() {
   weeklyHours.value = await getSetting('weeklyHours', 35)
   workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
   morningStartTime.value = await getSetting('morningStartTime', '09:00')
+}
+
+onMounted(async () => {
+  await loadSettings()
+  // Écouter les changements en temps réel
+  window.addEventListener('setting-updated', loadSettings)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('setting-updated', loadSettings)
 })
 
 watch(weeklyHours, async (val) => {
@@ -46,6 +59,25 @@ function toggleDay(day) {
     workDays.value = [...workDays.value, day]
   }
   setSetting('workDays', [...workDays.value])
+}
+
+async function manualSync() {
+  await fullSync()
+}
+
+function formatRelativeTime(date) {
+  if (!date) return ''
+  const now = Date.now()
+  const diff = now - date.getTime()
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  
+  if (seconds < 60) return 'à l\'instant'
+  if (minutes < 60) return `il y a ${minutes} min`
+  if (hours < 24) return `il y a ${hours}h`
+  const days = Math.floor(hours / 24)
+  return `il y a ${days}j`
 }
 
 const themeOptions = [
@@ -137,6 +169,57 @@ const themeOptions = [
       <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
         Sélectionnez les jours où vous travaillez pour le calcul du delta.
       </p>
+    </div>
+
+    <!-- Synchronization -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">
+      <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+        <CloudIcon class="w-4 h-4" />
+        Synchronisation cloud
+      </h2>
+      
+      <div v-if="!isConfigured" class="text-sm text-gray-600 dark:text-gray-300">
+        <p class="mb-2">☁️ Synchronisation cloud non configurée</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          Configurez Supabase pour synchroniser vos données. 
+          <a href="./SETUP_SUPABASE.md" target="_blank" class="text-indigo-600 dark:text-indigo-400 underline">Voir la documentation</a>
+        </p>
+      </div>
+      
+      <div v-else>
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <CheckCircleIcon v-if="!syncError" class="w-5 h-5 text-green-500" />
+            <XCircleIcon v-else class="w-5 h-5 text-red-500" />
+            <span class="text-sm font-medium">
+              {{ syncError ? 'Erreur' : 'Configuré' }}
+            </span>
+          </div>
+          <button
+            @click="manualSync"
+            :disabled="isSyncing"
+            class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            :class="isSyncing 
+              ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed' 
+              : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/70'"
+          >
+            <ArrowPathIcon class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" />
+            {{ isSyncing ? 'Sync...' : 'Synchroniser' }}
+          </button>
+        </div>
+        
+        <p v-if="lastSyncDate" class="text-xs text-gray-500 dark:text-gray-400">
+          Dernière sync : {{ formatRelativeTime(lastSyncDate) }}
+        </p>
+        
+        <p v-if="syncError" class="text-xs text-red-500 mt-1">
+          {{ syncError }}
+        </p>
+        
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+          💡 La synchronisation est automatique lors de chaque modification
+        </p>
+      </div>
     </div>
 
     <!-- About -->

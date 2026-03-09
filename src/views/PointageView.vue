@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { db } from '../db'
+import { addPointage } from '../db'
 import { ClockIcon, CheckCircleIcon } from '@heroicons/vue/24/outline'
 
 const step = ref('initial') // 'initial' | 'timePicker' | 'success'
@@ -21,7 +21,7 @@ async function onConfirm() {
   const d = new Date()
   d.setHours(selectedHour.value, selectedMinute.value, 0, 0)
 
-  await db.pointages.add({
+  await addPointage({
     timestamp: d.getTime(),
     date: d.toISOString().split('T')[0]
   })
