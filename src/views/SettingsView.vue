@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { getSetting, setSetting } from '../db'
 import { useTheme } from '../composables/useTheme'
+import { ComputerDesktopIcon, SunIcon, MoonIcon } from '@heroicons/vue/24/outline'
 
 const { theme } = useTheme()
 const weeklyHours = ref(35)
@@ -48,9 +49,9 @@ function toggleDay(day) {
 }
 
 const themeOptions = [
-  { value: 'system', label: 'Système', icon: '💻' },
-  { value: 'light', label: 'Clair', icon: '☀️' },
-  { value: 'dark', label: 'Sombre', icon: '🌙' }
+  { value: 'system', label: 'Système', icon: ComputerDesktopIcon },
+  { value: 'light', label: 'Clair', icon: SunIcon },
+  { value: 'dark', label: 'Sombre', icon: MoonIcon }
 ]
 </script>
 
@@ -71,7 +72,7 @@ const themeOptions = [
             ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500'
             : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
         >
-          <span class="text-lg block mb-1">{{ opt.icon }}</span>
+          <component :is="opt.icon" class="w-6 h-6 mx-auto mb-1" />
           {{ opt.label }}
         </button>
       </div>

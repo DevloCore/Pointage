@@ -1,6 +1,13 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { db } from '../db'
+import { 
+  ClockIcon, 
+  PencilSquareIcon, 
+  TrashIcon, 
+  CheckIcon, 
+  XMarkIcon 
+} from '@heroicons/vue/24/outline'
 
 const allPointages = ref([])
 const activeTab = ref('day')
@@ -227,9 +234,7 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
 
     <!-- Entries -->
     <div v-if="groupedEntries.length === 0" class="text-center text-gray-500 dark:text-gray-400 py-12">
-      <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <ClockIcon class="w-12 h-12 mx-auto mb-3 opacity-50" />
       <p>Aucun pointage</p>
     </div>
 
@@ -242,29 +247,62 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow divide-y divide-gray-100 dark:divide-gray-700">
         <div v-for="(pair, pairIndex) in group.pairs" :key="pairIndex" class="px-4 py-3">
           <!-- Pair view: start → end -->
-          <div v-if="editingId !== pair.start.id && (pair.end === null || editingId !== pair.end.id)" class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="font-mono text-lg">{{ formatTime(pair.start.timestamp) }}</span>
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-              <span v-if="pair.end" class="font-mono text-lg">{{ formatTime(pair.end.timestamp) }}</span>
-              <span v-else class="text-sm font-medium text-green-500 animate-pulse">En cours</span>
+          <div v-if="editingId !== pair.start.id && (pair.end === null || editingId !== pair.end.id)">
+            <!-- Start time row -->
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 min-w-[80px]">
+                  <ClockIcon class="w-4 h-4 text-green-500" />
+                  <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Début</span>
+                </div>
+                <span class="font-mono text-lg font-semibold">{{ formatTime(pair.start.timestamp) }}</span>
+              </div>
+              <div class="flex gap-1">
+                <button @click="startEdit(pair.start)" class="p-1.5 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Modifier l'heure de début">
+                  <PencilSquareIcon class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                </button>
+                <button @click="deleteEntry(pair.start.id)" class="p-1.5 hover:bg-red-50 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Supprimer le début">
+                  <TrashIcon class="w-4 h-4 text-red-500" />
+                </button>
+              </div>
             </div>
-            <div class="flex gap-2">
-              <button @click="startEdit(pair.start)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm transition-colors">
-                Modifier
-              </button>
-              <button @click="deleteEntry(pair.start.id)" class="text-red-500 hover:text-red-700 text-sm transition-colors">
-                Supprimer
-              </button>
+
+            <!-- End time row -->
+            <div v-if="pair.end" class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 min-w-[80px]">
+                  <ClockIcon class="w-4 h-4 text-red-500" />
+                  <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Fin</span>
+                </div>
+                <span class="font-mono text-lg font-semibold">{{ formatTime(pair.end.timestamp) }}</span>
+              </div>
+              <div class="flex gap-1">
+                <button @click="startEdit(pair.end)" class="p-1.5 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Modifier l'heure de fin">
+                  <PencilSquareIcon class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                </button>
+                <button @click="deleteEntry(pair.end.id)" class="p-1.5 hover:bg-red-50 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Supprimer la fin">
+                  <TrashIcon class="w-4 h-4 text-red-500" />
+                </button>
+              </div>
+            </div>
+
+            <!-- In progress indicator -->
+            <div v-else class="flex items-center gap-3">
+              <div class="flex items-center gap-2 min-w-[80px]">
+                <ClockIcon class="w-4 h-4 text-amber-500 animate-pulse" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Fin</span>
+              </div>
+              <span class="text-sm font-medium text-amber-500 animate-pulse">En cours...</span>
             </div>
           </div>
 
           <!-- Edit mode for start entry -->
           <div v-else-if="editingId === pair.start.id" class="space-y-2">
             <div class="flex items-center gap-3">
-              <span class="text-xs text-gray-400 w-12">Début</span>
+              <div class="flex items-center gap-2 min-w-[80px]">
+                <ClockIcon class="w-4 h-4 text-green-500" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Début</span>
+              </div>
               <select v-model.number="editHour" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option v-for="h in hours" :key="h" :value="h">{{ String(h).padStart(2, '0') }}</option>
               </select>
@@ -272,15 +310,22 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
               <select v-model.number="editMinute" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option v-for="m in minutes" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
               </select>
-              <button @click="saveEdit(pair.start)" class="text-green-500 hover:text-green-700 text-sm font-medium transition-colors">OK</button>
-              <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">✕</button>
+              <button @click="saveEdit(pair.start)" class="p-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors" title="Valider">
+                <CheckIcon class="w-4 h-4" />
+              </button>
+              <button @click="cancelEdit" class="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Annuler">
+                <XMarkIcon class="w-4 h-4 text-gray-500" />
+              </button>
             </div>
           </div>
 
           <!-- Edit mode for end entry -->
           <div v-else-if="pair.end && editingId === pair.end.id" class="space-y-2">
             <div class="flex items-center gap-3">
-              <span class="text-xs text-gray-400 w-12">Fin</span>
+              <div class="flex items-center gap-2 min-w-[80px]">
+                <ClockIcon class="w-4 h-4 text-red-500" />
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Fin</span>
+              </div>
               <select v-model.number="editHour" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option v-for="h in hours" :key="h" :value="h">{{ String(h).padStart(2, '0') }}</option>
               </select>
@@ -288,19 +333,13 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
               <select v-model.number="editMinute" class="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option v-for="m in minutes" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
               </select>
-              <button @click="saveEdit(pair.end)" class="text-green-500 hover:text-green-700 text-sm font-medium transition-colors">OK</button>
-              <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">✕</button>
+              <button @click="saveEdit(pair.end)" class="p-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors" title="Valider">
+                <CheckIcon class="w-4 h-4" />
+              </button>
+              <button @click="cancelEdit" class="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Annuler">
+                <XMarkIcon class="w-4 h-4 text-gray-500" />
+              </button>
             </div>
-          </div>
-
-          <!-- Actions for end entry (shown below pair when not editing) -->
-          <div v-if="pair.end && editingId !== pair.start.id && editingId !== pair.end.id" class="flex gap-2 mt-1 justify-end">
-            <button @click="startEdit(pair.end)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs transition-colors">
-              Modifier fin
-            </button>
-            <button @click="deleteEntry(pair.end.id)" class="text-red-500 hover:text-red-700 text-xs transition-colors">
-              Supprimer fin
-            </button>
           </div>
         </div>
       </div>

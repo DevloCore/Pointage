@@ -5,6 +5,7 @@ import { db, getSetting } from '../db'
 const todayPointages = ref([])
 const weekPointages = ref([])
 const weeklyHours = ref(35)
+const dailyHours = ref(7)
 const workDays = ref([1, 2, 3, 4, 5])
 const morningStartTime = ref('09:00')
 const now = ref(Date.now())
@@ -56,6 +57,12 @@ const weekProgress = computed(() => {
   const target = weeklyHours.value * 3600000
   if (target === 0) return 0
   return Math.min(100, Math.round((weekWorked.value / target) * 100))
+})
+
+const dayProgress = computed(() => {
+  const target = dailyHours.value * 3600000
+  if (target === 0) return 0
+  return Math.min(100, Math.round((todayWorked.value / target) * 100))
 })
 
 const isWorking = computed(() => {
@@ -115,13 +122,28 @@ const weekDelta = computed(() => {
     if (isCurrentlyWorking) {
       // Live day: add elapsed time for the ongoing session
       const liveWorked = dayWorked + (now.value - sorted[sorted.length - 1].timestamp)
-      // Use morningStartTime as the expected-progress reference so that arriving
-      // early shows a positive delta right away.
+      
+      // Calculate expected work time, accounting for breaks
       const morningStartMs = new Date(
         today.getFullYear(), today.getMonth(), today.getDate(),
         startHour, startMin
       ).getTime()
-      const expectedSoFar = Math.max(0, Math.min(dailyExpectedMs, now.value - morningStartMs))
+      
+      // Time elapsed since morningStartTime
+      let elapsedSinceMorning = Math.max(0, now.value - morningStartMs)
+      
+      // Subtract break periods (clock-out to clock-in gaps)
+      let totalBreakTime = 0
+      for (let j = 1; j < sorted.length - 1; j += 2) {
+        // j is clock-out, j+1 is clock-in
+        if (j + 1 < sorted.length) {
+          totalBreakTime += sorted[j + 1].timestamp - sorted[j].timestamp
+        }
+      }
+      
+      // Expected work time = elapsed time - breaks, capped at daily expected
+      const expectedSoFar = Math.max(0, Math.min(dailyExpectedMs, elapsedSinceMorning - totalBreakTime))
+      
       totalDelta += liveWorked - expectedSoFar
     } else {
       // Completed day (or past day with a missed clock-out — count only finished pairs)
@@ -153,8 +175,9 @@ onMounted(async () => {
   }
   weekPointages.value = await db.pointages.where('date').anyOf(dates).toArray()
 
-  weeklyHours.value = await getSetting('weeklyHours', 35)
   workDays.value = await getSetting('workDays', [1, 2, 3, 4, 5])
+  weeklyHours.value = await getSetting('weeklyHours', 35)
+  dailyHours.value = weeklyHours.value / workDays.value.length
   morningStartTime.value = await getSetting('morningStartTime', '09:00')
 
   timerInterval = setInterval(() => {
@@ -189,8 +212,20 @@ onUnmounted(() => {
     <!-- Today -->
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">
       <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Aujourd'hui</h2>
-      <p class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{{ formatDuration(todayWorked) }}</p>
+      <p class="text-3xl font-bold text-cyan-600 dark:text-cyan-400">{{ formatDuration(todayWorked) }}</p>
       <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ todayPointages.length }} pointage(s)</p>
+	  <div class="mt-3">
+        <div class="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
+          <span>Progression</span>
+          <span>{{ dayProgress }}% de {{ dailyHours }}h</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+          <div
+            class="bg-cyan-600 dark:bg-cyan-400 h-2.5 rounded-full transition-all duration-500"
+            :style="{ width: dayProgress + '%' }"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Week -->
