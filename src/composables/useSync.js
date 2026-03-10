@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+﻿import { ref, computed } from 'vue'
 import { db } from '../db'
 import { 
   isSupabaseConfigured,
@@ -21,7 +21,7 @@ export function useSync() {
   // Synchroniser tous les pointages locaux vers Supabase
   async function syncToCloud() {
     if (!isSupabaseConfigured()) {
-      console.log('Sync désactivé : Supabase non configuré')
+      syncLogger.info('Sync désactivé : Supabase non configuré')
       return { success: false, error: 'Non configuré' }
     }
 
@@ -46,12 +46,12 @@ export function useSync() {
       }
 
       lastSyncDate.value = new Date()
-      showSuccess('Données synchronisées vers le cloud', 3000)
+      showSuccess('Données synchronisées vers le cloud', TOAST_DURATION.SUCCESS)
       return { success: true }
     } catch (error) {
       syncError.value = error.message
       console.error('Erreur de synchronisation:', error)
-      showError('Échec de synchronisation vers le cloud', 5000)
+      showError('Échec de synchronisation vers le cloud', TOAST_DURATION.ERROR)
       return { success: false, error: error.message }
     } finally {
       isSyncing.value = false
@@ -61,7 +61,7 @@ export function useSync() {
   // Récupérer les données depuis Supabase et les fusionner avec le local
   async function syncFromCloud() {
     if (!isSupabaseConfigured()) {
-      console.log('Sync désactivé : Supabase non configuré')
+      syncLogger.info('Sync désactivé : Supabase non configuré')
       return { success: false, error: 'Non configuré' }
     }
 
@@ -97,12 +97,12 @@ export function useSync() {
       }
 
       lastSyncDate.value = new Date()
-      showSuccess('Données récupérées depuis le cloud', 3000)
+      showSuccess('Données récupérées depuis le cloud', TOAST_DURATION.SUCCESS)
       return { success: true }
     } catch (error) {
       syncError.value = error.message
       console.error('Erreur de synchronisation:', error)
-      showError('Échec de récupération depuis le cloud', 5000)
+      showError('Échec de récupération depuis le cloud', TOAST_DURATION.ERROR)
       return { success: false, error: error.message }
     } finally {
       isSyncing.value = false
@@ -115,7 +115,7 @@ export function useSync() {
     const toResult = await syncToCloud()
     
     if (fromResult.success && toResult.success) {
-      showSuccess('Synchronisation bidirectionnelle réussie', 3000)
+      showSuccess('Synchronisation bidirectionnelle réussie', TOAST_DURATION.SUCCESS)
     }
     
     return {
