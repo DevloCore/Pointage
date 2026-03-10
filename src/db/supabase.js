@@ -79,6 +79,19 @@ export async function getPointagesFromSupabaseByDateRange(startDate, endDate) {
 }
 
 /**
+ * Récupère une page de pointages depuis Supabase (tri timestamp desc).
+ */
+export async function getPointagesFromSupabasePage(offset = 0, limit = 40) {
+  return executeSupabaseOperation('Get Pointages Page', async () => {
+    return supabase
+      .from('pointages')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .range(offset, offset + limit - 1)
+  })
+}
+
+/**
  * Récupère la date du pointage le plus ancien côté Supabase.
  */
 export async function getOldestPointageDateFromSupabase() {

@@ -4,6 +4,7 @@ import {
   syncSettingsToSupabase,
   deletePointageFromSupabase,
   getPointagesFromSupabaseByDateRange,
+  getPointagesFromSupabasePage,
   getOldestPointageDateFromSupabase,
   isSupabaseConfigured
 } from './supabase'
@@ -19,7 +20,6 @@ export const db = new Dexie('PointageDB')
 const pointagesCache = new Map()
 const hydratedCloudRanges = new Set()
 const CACHE_TTL_MS = 30000
-const HISTORY_CHUNK_DAYS = 30
 const oldestCloudDateCache = {
   value: null,
   ts: 0
@@ -44,8 +44,25 @@ function shiftDateKey(dateKey, deltaDays) {
   return toDateKey(d)
 }
 
+function getMonthRangeFromDateKey(dateKey) {
+  const d = parseDateKey(dateKey)
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const monthStart = new Date(year, month, 1)
+  const monthEnd = new Date(year, month + 1, 0)
+
+  return {
+    startDate: toDateKey(monthStart),
+    endDate: toDateKey(monthEnd)
+  }
+}
+
 function makeRangeKey(startDate, endDate) {
   return `${startDate}__${endDate}`
+}
+
+function makePageKey(limit, offset) {
+  return `page__${limit}__${offset}`
 }
 
 function invalidatePointagesCache() {
@@ -136,20 +153,21 @@ export async function getOldestPointageDate() {
 }
 
 /**
- * Charge un chunk d'historique en partant d'une date de fin.
+ * Charge un chunk d'historique correspondant a un mois civil complet.
+ * Le curseur represente une date de reference, et le mois de cette date est charge.
  */
 export async function getPointagesHistoryChunk(cursorEndDate, options = {}) {
-  const { days = HISTORY_CHUNK_DAYS, hydrateCloud = true, useCache = true } = options
+  const { hydrateCloud = true, useCache = true } = options
   const endDate = cursorEndDate || toDateKey(new Date())
-  const startDate = shiftDateKey(endDate, -(days - 1))
+  const { startDate, endDate: monthEndDate } = getMonthRangeFromDateKey(endDate)
 
-  const data = await getPointagesByDateRange(startDate, endDate, { useCache, hydrateCloud })
+  const data = await getPointagesByDateRange(startDate, monthEndDate, { useCache, hydrateCloud })
   const sorted = [...data].sort((a, b) => b.timestamp - a.timestamp)
 
   return {
     data: sorted,
     startDate,
-    endDate,
+    endDate: monthEndDate,
     nextCursorEndDate: shiftDateKey(startDate, -1)
   }
 }
@@ -175,6 +193,60 @@ export async function getPointagesPage(limit = 200, offset = 0) {
     .offset(offset)
     .limit(limit)
     .toArray()
+}
+
+async function hydratePointagesPageFromCloud(limit, offset) {
+  if (!isSupabaseConfigured()) {
+    return { fetchedCount: 0 }
+  }
+
+  const result = await getPointagesFromSupabasePage(offset, limit)
+  if (!result.success || !result.data) {
+    return { fetchedCount: 0 }
+  }
+
+  for (const pointage of result.data) {
+    await db.pointages.put({
+      id: pointage.id,
+      timestamp: pointage.timestamp,
+      date: pointage.date
+    })
+  }
+
+  return { fetchedCount: result.data.length }
+}
+
+/**
+ * Récupère une page de pointages pour l'onglet "Tout" avec cache et backfill cloud.
+ */
+export async function getPointagesAllPage(limit = 40, offset = 0, options = {}) {
+  const { useCache = true, hydrateCloud = true } = options
+  const pageKey = makePageKey(limit, offset)
+  const now = Date.now()
+  const cached = pointagesCache.get(pageKey)
+
+  if (useCache && cached && now - cached.ts < CACHE_TTL_MS) {
+    return cached.data
+  }
+
+  let cloudFetched = 0
+  if (hydrateCloud) {
+    const cloud = await hydratePointagesPageFromCloud(limit, offset)
+    cloudFetched = cloud.fetchedCount
+  }
+
+  const data = await getPointagesPage(limit, offset)
+  const hasMore = isSupabaseConfigured()
+    ? cloudFetched === limit || data.length === limit
+    : data.length === limit
+
+  const payload = {
+    data,
+    hasMore
+  }
+
+  pointagesCache.set(pageKey, { ts: now, data: payload })
+  return payload
 }
 
 /**
