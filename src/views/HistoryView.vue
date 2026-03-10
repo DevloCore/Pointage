@@ -1,6 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { db, addPointage, updatePointage, deletePointage } from '../db'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import {
+  addPointage,
+  updatePointage,
+  deletePointage,
+  getPointagesByDateRange,
+  getPointagesHistoryChunk,
+  getOldestPointageDate
+} from '../db'
 import { 
   ClockIcon, 
   PencilSquareIcon, 
@@ -11,6 +18,15 @@ import {
 
 const allPointages = ref([])
 const activeTab = ref('day')
+const hasMoreAll = ref(false)
+const isLoading = ref(false)
+const infiniteSentinel = ref(null)
+const allCursorEndDate = ref('')
+const oldestKnownDate = ref('')
+const emptyAllChunks = ref(0)
+const loadedIds = new Set()
+let allObserver = null
+let allAutoLoadGuard = 0
 
 const editingId = ref(null)
 const editHour = ref(0)
@@ -163,21 +179,220 @@ async function confirmAdd() {
   // Le refresh sera déclenché par loadAll via l'événement
 }
 
-async function loadAll() {
-  allPointages.value = await db.pointages.toArray()
-  console.log('Rechargement historique:', allPointages.value.length, 'pointages')
+function getTodayRange() {
+  const now = new Date()
+  const date = now.toISOString().split('T')[0]
+  return { start: date, end: date }
+}
+
+function getWeekRange() {
+  const monday = getMonday(new Date())
+  const sunday = new Date(monday)
+  sunday.setDate(sunday.getDate() + 6)
+  return {
+    start: formatDate(monday),
+    end: formatDate(sunday)
+  }
+}
+
+async function loadDay() {
+  const { start, end } = getTodayRange()
+  allPointages.value = await getPointagesByDateRange(start, end)
+}
+
+async function loadWeek() {
+  const { start, end } = getWeekRange()
+  allPointages.value = await getPointagesByDateRange(start, end)
+}
+
+function mergeUniquePointages(newItems, reset = false) {
+  if (reset) {
+    loadedIds.clear()
+    allPointages.value = []
+  }
+
+  const merged = reset ? [] : [...allPointages.value]
+  let addedCount = 0
+  for (const item of newItems) {
+    if (loadedIds.has(item.id)) continue
+    loadedIds.add(item.id)
+    merged.push(item)
+    addedCount += 1
+  }
+
+  merged.sort((a, b) => b.timestamp - a.timestamp)
+  allPointages.value = merged
+  return addedCount
+}
+
+function canLoadMoreAll() {
+  if (!allCursorEndDate.value) return true
+  if (!oldestKnownDate.value) return true
+  return allCursorEndDate.value >= oldestKnownDate.value
+}
+
+async function initializeAllInfiniteState() {
+  allCursorEndDate.value = formatDate(new Date())
+  oldestKnownDate.value = (await getOldestPointageDate()) || ''
+  emptyAllChunks.value = 0
+  hasMoreAll.value = canLoadMoreAll()
+}
+
+async function loadAllChunk(reset = false) {
+  if (reset) {
+    await initializeAllInfiniteState()
+    mergeUniquePointages([], true)
+  }
+
+  if (!canLoadMoreAll()) {
+    hasMoreAll.value = false
+    return
+  }
+
+  // Saute automatiquement les fenêtres vides (ex: plusieurs mois sans pointages)
+  // pour atteindre directement les périodes qui contiennent des données.
+  let skips = 0
+  const maxSkipsWithoutCloudBound = 240 // borne inconnue: continuer à travers les gros trous
+  const maxSkipsWithCloudBound = 240 // ~20 ans de fenêtres de 30 jours
+
+  while (canLoadMoreAll()) {
+    const chunk = await getPointagesHistoryChunk(allCursorEndDate.value, {
+      days: 30,
+      hydrateCloud: true,
+      useCache: true
+    })
+
+    const addedCount = mergeUniquePointages(chunk.data, false)
+    allCursorEndDate.value = chunk.nextCursorEndDate
+
+    if (addedCount > 0) {
+      emptyAllChunks.value = 0
+      break
+    }
+
+    emptyAllChunks.value += 1
+    skips += 1
+
+    if (!oldestKnownDate.value && skips >= maxSkipsWithoutCloudBound) {
+      // Borne cloud indisponible: on ne coupe pas l'historique,
+      // on rend la main pour un prochain cycle de scroll.
+      break
+    }
+
+    if (oldestKnownDate.value && skips >= maxSkipsWithCloudBound) {
+      break
+    }
+  }
+
+  hasMoreAll.value = canLoadMoreAll()
+  // Ne jamais couper définitivement sans borne cloud fiable.
+  if (!oldestKnownDate.value) {
+    hasMoreAll.value = true
+  }
+}
+
+async function loadForActiveTab({ reset = true } = {}) {
+  isLoading.value = true
+  try {
+    if (activeTab.value === 'day') {
+      await loadDay()
+      hasMoreAll.value = false
+      return
+    }
+
+    if (activeTab.value === 'week') {
+      await loadWeek()
+      hasMoreAll.value = false
+      return
+    }
+
+    await loadAllChunk(reset)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function loadMoreAll() {
+  if (activeTab.value !== 'all' || !hasMoreAll.value || isLoading.value) return
+  await loadForActiveTab({ reset: false })
+}
+
+async function handlePointageUpdated() {
+  // Un événement temps réel peut insérer/modifier des pointages récents;
+  // on repart d'un chargement propre pour éviter un historique incohérent.
+  await loadForActiveTab({ reset: true })
+}
+
+function setupInfiniteObserver() {
+  if (allObserver) {
+    allObserver.disconnect()
+  }
+
+  allObserver = new IntersectionObserver(async (entries) => {
+    const entry = entries[0]
+    if (!entry?.isIntersecting) return
+    if (activeTab.value !== 'all' || !hasMoreAll.value || isLoading.value) return
+
+    await loadMoreAll()
+
+    // Evite une boucle continue si la sentinelle reste visible.
+    allAutoLoadGuard += 1
+    if (allAutoLoadGuard > 10) {
+      allAutoLoadGuard = 0
+      return
+    }
+  }, {
+    root: null,
+    rootMargin: '300px 0px',
+    threshold: 0.01
+  })
+
+  if (infiniteSentinel.value) {
+    allObserver.observe(infiniteSentinel.value)
+  }
+}
+
+function reconnectInfiniteObserver() {
+  if (!allObserver) return
+  allObserver.disconnect()
+  if (infiniteSentinel.value) {
+    allObserver.observe(infiniteSentinel.value)
+  }
+}
+
+async function handleTabChange(tab) {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  allAutoLoadGuard = 0
+  await loadForActiveTab({ reset: true })
 }
 
 // Charger au démarrage
-onMounted(() => {
-  loadAll()
+onMounted(async () => {
+  await loadForActiveTab({ reset: true })
+  setupInfiniteObserver()
+  await nextTick()
+  reconnectInfiniteObserver()
   // Écouter les changements en temps réel
-  window.addEventListener('pointage-updated', loadAll)
+  window.addEventListener('pointage-updated', handlePointageUpdated)
+})
+
+watch(activeTab, async () => {
+  await nextTick()
+  reconnectInfiniteObserver()
+})
+
+watch(infiniteSentinel, () => {
+  reconnectInfiniteObserver()
 })
 
 // Nettoyer les listeners
 onUnmounted(() => {
-  window.removeEventListener('pointage-updated', loadAll)
+  window.removeEventListener('pointage-updated', handlePointageUpdated)
+  if (allObserver) {
+    allObserver.disconnect()
+    allObserver = null
+  }
 })
 
 const hours = Array.from({ length: 24 }, (_, i) => i)
@@ -201,7 +416,7 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
       <button
         v-for="tab in [{ key: 'day', label: 'Jour' }, { key: 'week', label: 'Semaine' }, { key: 'all', label: 'Tout' }]"
         :key="tab.key"
-        @click="activeTab = tab.key"
+        @click="handleTabChange(tab.key)"
         class="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"
         :class="activeTab === tab.key
           ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -355,6 +570,24 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
           </div>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="activeTab === 'all'"
+      ref="infiniteSentinel"
+      class="pb-8 text-center text-sm text-gray-500 dark:text-gray-400"
+    >
+      <span v-if="isLoading">Chargement...</span>
+      <div v-else-if="hasMoreAll" class="flex flex-col items-center gap-3">
+        <span>Faites défiler pour charger plus</span>
+        <button
+          @click="loadMoreAll"
+          class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-xl transition-colors"
+        >
+          Charger plus
+        </button>
+      </div>
+      <span v-else>Fin de l'historique</span>
     </div>
   </div>
 </template>

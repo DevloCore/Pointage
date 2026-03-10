@@ -2,10 +2,9 @@
 import App from './App.vue'
 import router from './router'
 import './style.css'
-import { db } from './db'
+import { db, preloadRecentPointagesFromCloud, notifyPointagesChanged } from './db'
 import { 
   isSupabaseConfigured, 
-  getPointagesFromSupabase, 
   getSettingsFromSupabase, 
   subscribeToChanges 
 } from './db/supabase'
@@ -21,39 +20,15 @@ const { error: showError, warning: showWarning } = useToast()
  */
 async function syncInitialPointages() {
   try {
-    const result = await getPointagesFromSupabase()
-    
+    const result = await preloadRecentPointagesFromCloud(45)
+
     if (!result.success) {
-      syncLogger.error('Échec sync initiale pointages:', result.error)
+      syncLogger.error('Échec preload pointages cloud récents:', result.reason || 'unknown')
       showError('Échec de récupération des données cloud. Seules les données locales sont disponibles.', TOAST_DURATION.CRITICAL_ERROR)
       return
     }
 
-    if (!result.data) return
-
-    syncLogger.info(`Sync initiale: ${result.data.length} pointages du cloud`)
-
-    const cloudIds = result.data.map(p => p.id)
-    const localPointages = await db.pointages.toArray()
-    
-    // Supprimer les pointages locaux orphelins
-    for (const localPointage of localPointages) {
-      if (!cloudIds.includes(localPointage.id)) {
-        syncLogger.delete('Suppression locale du pointage orphelin:', localPointage.id)
-        await db.pointages.delete(localPointage.id)
-      }
-    }
-
-    // Ajouter ou mettre à jour les pointages du cloud
-    for (const pointage of result.data) {
-      await db.pointages.put({
-        id: pointage.id,
-        timestamp: pointage.timestamp,
-        date: pointage.date
-      })
-    }
-
-    syncLogger.success('Synchronisation initiale terminée')
+    syncLogger.success('Préchargement cloud récent terminé')
     dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
   } catch (err) {
     syncLogger.error('Exception sync initiale pointages:', err)
@@ -107,6 +82,7 @@ async function handlePointageChange(payload) {
         timestamp: pointage.timestamp,
         date: pointage.date
       })
+      notifyPointagesChanged()
       
       dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
       realtimeLogger.success('Pointage mis à jour localement')
@@ -121,6 +97,7 @@ async function handlePointageChange(payload) {
       
       realtimeLogger.delete('Suppression pointage:', deletedId)
       await db.pointages.delete(deletedId)
+      notifyPointagesChanged()
       
       dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
       realtimeLogger.success('Suppression locale terminée')

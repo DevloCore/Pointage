@@ -65,6 +65,33 @@ export async function getPointagesFromSupabase() {
 }
 
 /**
+ * Récupère les pointages depuis Supabase sur une plage de dates [startDate, endDate]
+ */
+export async function getPointagesFromSupabaseByDateRange(startDate, endDate) {
+  return executeSupabaseOperation('Get Pointages By Date Range', async () => {
+    return supabase
+      .from('pointages')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('timestamp', { ascending: false })
+  })
+}
+
+/**
+ * Récupère la date du pointage le plus ancien côté Supabase.
+ */
+export async function getOldestPointageDateFromSupabase() {
+  return executeSupabaseOperation('Get Oldest Pointage Date', async () => {
+    return supabase
+      .from('pointages')
+      .select('date')
+      .order('date', { ascending: true })
+      .limit(1)
+  })
+}
+
+/**
  * Synchronise les paramètres vers Supabase
  */
 export async function syncSettingsToSupabase(settings) {
