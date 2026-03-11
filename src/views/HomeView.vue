@@ -278,7 +278,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Delta semaine -->
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
       <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Delta semaine</h2>
       <p
         class="text-3xl font-bold"
@@ -292,11 +292,11 @@ onUnmounted(() => {
     </div>
 
     <!-- Quick action -->
-    <router-link
+    <!-- <router-link
       to="/pointage"
       class="block w-full bg-indigo-600 hover:bg-indigo-700 text-white text-center font-semibold py-4 rounded-2xl shadow-lg transition-colors"
     >
       Pointer maintenant
-    </router-link>
+    </router-link> -->
   </div>
 </template>
