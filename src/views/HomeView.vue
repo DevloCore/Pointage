@@ -1,6 +1,7 @@
-<script setup>
+﻿<script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { db, getSetting } from '../db'
+import PointageView from '../components/PointageView.vue'
 
 const todayPointages = ref([])
 const weekPointages = ref([])
@@ -221,6 +222,8 @@ onUnmounted(() => {
 <template>
   <div class="max-w-lg mx-auto px-4 pt-6">
     <h1 class="text-2xl font-bold mb-6">Accueil</h1>
+
+	<pointage-view />
 
     <!-- Status card -->
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-5 mb-4">

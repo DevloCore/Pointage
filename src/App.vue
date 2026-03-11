@@ -16,12 +16,12 @@ const router = useRouter()
 
 const navItems = [
   { to: '/', label: 'Accueil', icon: HomeIcon },
-  { to: '/pointage', label: 'Pointage', icon: ClockIcon },
+//   { to: '/pointage', label: 'Pointage', icon: ClockIcon },
   { to: '/history', label: 'Historique', icon: ClipboardDocumentListIcon },
   { to: '/settings', label: 'Paramètres', icon: Cog6ToothIcon }
 ]
 
-const navOrder = { '/': 0, '/pointage': 1, '/history': 2, '/settings': 3 }
+const navOrder = { '/': 0, '/history': 1, '/settings': 2 }
 const transitionName = ref('slide-left')
 
 watch(() => route.path, (to, from) => {
