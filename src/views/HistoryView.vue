@@ -305,7 +305,7 @@ const minutes = Array.from({ length: 60 }, (_, i) => i)
     <!-- Tabs -->
     <div class="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6">
       <button
-        v-for="tab in [{ key: 'day', label: 'Jour' }, { key: 'week', label: 'Semaine' }, { key: 'all', label: 'Tout' }]"
+        v-for="tab in [{ key: 'day', label: 'Aujourd\'hui' }, { key: 'week', label: 'Semaine' }, { key: 'all', label: 'Tout' }]"
         :key="tab.key"
         @click="handleTabChange(tab.key)"
         class="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"

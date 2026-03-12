@@ -223,6 +223,8 @@ onUnmounted(() => {
   <div class="max-w-lg mx-auto px-4 pt-6">
     <h1 class="text-2xl font-bold mb-6">Accueil</h1>
 
+	<!-- <iframe src="https://store.steampowered.com/widget/4371070/" frameborder="0" width="646" height="190"></iframe> -->
+
 	<pointage-view />
 
     <!-- Status card -->
