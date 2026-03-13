@@ -504,7 +504,7 @@ export async function setSetting(key, value) {
 }
 
 /**
- * Ajoute un pointage avec cache local immédiat et synchronisation cloud best-effort.
+ * Ajoute un pointage de facon atomique: aucun cache local si l'ecriture cloud echoue.
  */
 export async function addPointage(pointageData) {
   const generatedId = pointageData.id ?? Date.now()
@@ -514,17 +514,19 @@ export async function addPointage(pointageData) {
     date: pointageData.date
   }
 
-  await upsertPointageInCache(row)
-
-  if (isSupabaseConfigured()) {
-    const syncResult = await syncPointagesToSupabase([row])
-    if (!syncResult.success) {
-      showWarning('Pointage enregistré en cache local, cloud indisponible.', TOAST_DURATION.WARNING)
-      dbLogger.warn('Sync add pointage failed, cache kept:', syncResult.error)
-    }
-  } else {
-    showWarning('Configurez Supabase dans Paramètres pour activer le cloud.', TOAST_DURATION.WARNING)
+  if (!isSupabaseConfigured()) {
+    showWarning('Configuration Supabase requise pour enregistrer un pointage.', TOAST_DURATION.WARNING)
+    throw new Error('Supabase not configured')
   }
+
+  const syncResult = await syncPointagesToSupabase([row])
+  if (!syncResult.success) {
+    showError('Echec du pointage: aucune donnee n\'a ete enregistree.', TOAST_DURATION.ERROR)
+    dbLogger.warn('Sync add pointage failed, cache unchanged:', syncResult.error)
+    throw new Error(syncResult.error || 'Failed to add pointage')
+  }
+
+  await upsertPointageInCache(row)
 
   dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
   return row.id

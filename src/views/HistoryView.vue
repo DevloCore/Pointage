@@ -166,12 +166,16 @@ function openAddForm() {
 async function confirmAdd() {
   const d = new Date(addingDate.value + 'T00:00:00')
   d.setHours(addHour.value, addMinute.value, 0, 0)
-  await addPointage({
-    timestamp: d.getTime(),
-    date: addingDate.value
-  })
-  showAddForm.value = false
-  // Le refresh sera déclenché par loadAll via l'événement
+  try {
+    await addPointage({
+      timestamp: d.getTime(),
+      date: addingDate.value
+    })
+    showAddForm.value = false
+    // Le refresh sera déclenché par loadAll via l'événement
+  } catch {
+    // addPointage gere deja le toast d'erreur; on conserve le formulaire ouvert.
+  }
 }
 
 function getTodayRange() {

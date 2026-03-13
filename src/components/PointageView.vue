@@ -34,15 +34,19 @@ async function onConfirm() {
 	const d = new Date()
 	d.setHours(selectedHour.value, selectedMinute.value, 0, 0)
 
-	await addPointage({
-		timestamp: d.getTime(),
-		date: d.toISOString().split('T')[0]
-	})
+	try {
+		await addPointage({
+			timestamp: d.getTime(),
+			date: d.toISOString().split('T')[0]
+		})
 
-	step.value = 'success'
-	setTimeout(() => {
-		step.value = 'initial'
-	}, 2500)
+		step.value = 'success'
+		setTimeout(() => {
+			step.value = 'initial'
+		}, 2500)
+	} catch {
+		// addPointage gere deja le toast d'erreur; on reste sur le selecteur.
+	}
 }
 
 function onCancel() {
