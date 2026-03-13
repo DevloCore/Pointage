@@ -15,7 +15,7 @@ Application de suivi du temps de travail — Vue.js 3 + Tailwind CSS + Capacitor
 - [Vue.js 3](https://vuejs.org/) avec `<script setup>`
 - [Tailwind CSS 4](https://tailwindcss.com/)
 - [Vite](https://vite.dev/)
-- [Dexie.js](https://dexie.org/) (IndexedDB) — Stockage local
+- Cache local persistant (LocalStorage + helper de cache)
 - [Supabase](https://supabase.com/) — Synchronisation cloud (optionnel)
 - [Capacitor](https://capacitorjs.com/) pour le portage mobile
 
@@ -28,14 +28,15 @@ npm run dev
 
 ## Synchronisation cloud (optionnel)
 
-L'application fonctionne **100% hors ligne** par défaut avec Dexie/IndexedDB.
+L'application fonctionne **100% hors ligne** par défaut avec le cache local persistant.
 
 Pour activer la synchronisation cloud avec Supabase :
 
 1. Suivez le guide complet : [SETUP_SUPABASE.md](./SETUP_SUPABASE.md)
 2. Créez un compte gratuit sur [Supabase](https://supabase.com)
-3. Copiez `.env.example` en `.env` et ajoutez vos clés
-4. Vos données seront automatiquement synchronisées !
+3. Ouvrez l'onglet **Paramètres**
+4. Saisissez l'URL Supabase et la clé anon dans la section cloud
+5. Vos données seront automatiquement synchronisées !
 
 ## Build
 

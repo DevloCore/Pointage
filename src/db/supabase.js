@@ -1,18 +1,72 @@
 import { createClient } from '@supabase/supabase-js'
+import { ref, readonly } from 'vue'
 import { supabaseLogger } from '../utils/logger'
 
-// Configuration Supabase
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+let supabase = null
+const supabaseConfigured = ref(false)
 
-export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY 
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null
+export const supabaseConfiguredRef = readonly(supabaseConfigured)
+
+/**
+ * Configure dynamiquement le client Supabase depuis les paramètres utilisateur.
+ */
+export function configureSupabase({ url = '', anonKey = '' } = {}) {
+  const cleanUrl = String(url).trim()
+  const cleanAnonKey = String(anonKey).trim()
+
+  if (!cleanUrl || !cleanAnonKey) {
+    supabase = null
+    supabaseConfigured.value = false
+    supabaseLogger.info('Supabase désactivé: URL ou clé manquante')
+    return false
+  }
+
+  try {
+    supabase = createClient(cleanUrl, cleanAnonKey)
+    supabaseConfigured.value = true
+    supabaseLogger.success('Client Supabase configuré')
+    return true
+  } catch (error) {
+    supabase = null
+    supabaseConfigured.value = false
+    supabaseLogger.error('Configuration Supabase invalide:', error)
+    return false
+  }
+}
+
+/**
+ * Teste la connexion Supabase sans modifier le client global.
+ */
+export async function testSupabaseConnection({ url = '', anonKey = '' } = {}) {
+  const cleanUrl = String(url).trim()
+  const cleanAnonKey = String(anonKey).trim()
+
+  if (!cleanUrl || !cleanAnonKey) {
+    return { success: false, error: 'URL ou clé Supabase manquante' }
+  }
+
+  try {
+    const testClient = createClient(cleanUrl, cleanAnonKey)
+    const { error } = await testClient
+      .from('settings')
+      .select('key')
+      .limit(1)
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true }
+  } catch (error) {
+    supabaseLogger.error('Test connexion Supabase échoué:', error)
+    return { success: false, error: error.message }
+  }
+}
 
 /**
  * Vérifie si Supabase est configuré
  */
-export const isSupabaseConfigured = () => supabase !== null
+export const isSupabaseConfigured = () => supabaseConfigured.value
 
 /**
  * Fonction générique pour exécuter une opération Supabase avec gestion d'erreur

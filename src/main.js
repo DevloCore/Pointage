@@ -2,8 +2,17 @@
 import App from './App.vue'
 import router from './router'
 import './style.css'
-import { db, preloadRecentPointagesFromCloud, notifyPointagesChanged } from './db'
+import {
+  getSetting,
+  preloadRecentPointagesFromCloud,
+  notifyPointagesChanged,
+  upsertPointageInCache,
+  removePointageFromCache,
+  upsertSettingInCache,
+  removeSettingFromCache
+} from './db'
 import { 
+  configureSupabase,
   isSupabaseConfigured, 
   getSettingsFromSupabase, 
   subscribeToChanges 
@@ -14,6 +23,8 @@ import { dispatchCustomEvent } from './utils/dbHelpers'
 import { syncLogger, realtimeLogger } from './utils/logger'
 
 const { error: showError, warning: showWarning } = useToast()
+let realtimeSubscription = null
+let activeSupabaseFingerprint = ''
 
 /**
  * Synchronisation initiale des pointages depuis le cloud
@@ -52,7 +63,7 @@ async function syncInitialSettings() {
     if (!result.data) return
 
     for (const setting of result.data) {
-      await db.settings.put({
+      await upsertSettingInCache({
         key: setting.key,
         value: setting.value
       })
@@ -77,7 +88,7 @@ async function handlePointageChange(payload) {
       const pointage = payload.new
       realtimeLogger.info('Mise à jour/ajout pointage:', pointage.id)
       
-      await db.pointages.put({
+      await upsertPointageInCache({
         id: pointage.id,
         timestamp: pointage.timestamp,
         date: pointage.date
@@ -96,7 +107,7 @@ async function handlePointageChange(payload) {
       }
       
       realtimeLogger.delete('Suppression pointage:', deletedId)
-      await db.pointages.delete(deletedId)
+      await removePointageFromCache(deletedId)
       notifyPointagesChanged()
       
       dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
@@ -117,14 +128,14 @@ async function handleSettingChange(payload) {
   try {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
       const setting = payload.new
-      await db.settings.put({
+      await upsertSettingInCache({
         key: setting.key,
         value: setting.value
       })
       dispatchCustomEvent(CUSTOM_EVENTS.SETTING_UPDATED)
     } 
     else if (payload.eventType === 'DELETE') {
-      await db.settings.delete(payload.old.key)
+      await removeSettingFromCache(payload.old.key)
       dispatchCustomEvent(CUSTOM_EVENTS.SETTING_UPDATED)
     }
   } catch (error) {
@@ -133,14 +144,61 @@ async function handleSettingChange(payload) {
   }
 }
 
-// Initialisation
-if (isSupabaseConfigured()) {
-  syncInitialPointages()
-  syncInitialSettings()
-  
-  realtimeLogger.info('Abonnement aux changements real-time Supabase')
-  subscribeToChanges(handlePointageChange, handleSettingChange)
+async function initializeSupabaseFromUserSettings() {
+  const supabaseUrl = await getSetting('supabaseUrl', '')
+  const supabaseAnonKey = await getSetting('supabaseAnonKey', '')
+
+  configureSupabase({
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey
+  })
+
+  return {
+    supabaseUrl,
+    supabaseAnonKey,
+    fingerprint: `${String(supabaseUrl).trim()}::${String(supabaseAnonKey).trim()}`
+  }
 }
+
+async function bootstrapCloudSync() {
+  const { fingerprint } = await initializeSupabaseFromUserSettings()
+
+  if (!isSupabaseConfigured()) {
+    if (realtimeSubscription) {
+      realtimeSubscription.unsubscribe()
+      realtimeSubscription = null
+    }
+    activeSupabaseFingerprint = ''
+    syncLogger.info('Cloud désactivé: configuration Supabase absente')
+    return
+  }
+
+  if (realtimeSubscription && activeSupabaseFingerprint === fingerprint) {
+    return
+  }
+
+  if (realtimeSubscription) {
+    realtimeSubscription.unsubscribe()
+    realtimeSubscription = null
+  }
+
+  activeSupabaseFingerprint = fingerprint
+
+  await syncInitialPointages()
+  await syncInitialSettings()
+
+  realtimeLogger.info('Abonnement aux changements real-time Supabase')
+  realtimeSubscription = subscribeToChanges(handlePointageChange, handleSettingChange)
+}
+
+window.addEventListener(CUSTOM_EVENTS.SETTING_UPDATED, (event) => {
+  const changedKey = event?.detail?.key
+  if (changedKey === 'supabaseUrl' || changedKey === 'supabaseAnonKey') {
+    bootstrapCloudSync()
+  }
+})
+
+bootstrapCloudSync()
 
 const app = createApp(App)
 app.use(router)

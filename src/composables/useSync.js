@@ -1,13 +1,24 @@
 ﻿import { ref, computed } from 'vue'
-import { db } from '../db'
+import {
+  getAllPointagesFromCache,
+  getAllSettingsFromCache,
+  upsertPointageInCache,
+  upsertSettingInCache,
+  notifyPointagesChanged
+} from '../db'
 import { 
   isSupabaseConfigured,
+  supabaseConfiguredRef,
   syncPointagesToSupabase,
   getPointagesFromSupabase,
   syncSettingsToSupabase,
   getSettingsFromSupabase
 } from '../db/supabase'
 import { useToast } from './useToast'
+import { TOAST_DURATION } from '../utils/constants'
+import { syncLogger } from '../utils/logger'
+import { dispatchCustomEvent } from '../utils/dbHelpers'
+import { CUSTOM_EVENTS } from '../utils/constants'
 
 const { success: showSuccess, error: showError } = useToast()
 
@@ -16,7 +27,7 @@ const lastSyncDate = ref(null)
 const syncError = ref(null)
 
 export function useSync() {
-  const isConfigured = computed(() => isSupabaseConfigured())
+  const isConfigured = computed(() => supabaseConfiguredRef.value && isSupabaseConfigured())
 
   // Synchroniser tous les pointages locaux vers Supabase
   async function syncToCloud() {
@@ -30,7 +41,7 @@ export function useSync() {
 
     try {
       // Sync pointages
-      const pointages = await db.pointages.toArray()
+      const pointages = await getAllPointagesFromCache()
       const pointagesResult = await syncPointagesToSupabase(pointages)
       
       if (!pointagesResult.success) {
@@ -38,7 +49,7 @@ export function useSync() {
       }
 
       // Sync settings
-      const settings = await db.settings.toArray()
+      const settings = await getAllSettingsFromCache({ excludeLocalOnly: true })
       const settingsResult = await syncSettingsToSupabase(settings)
       
       if (!settingsResult.success) {
@@ -72,28 +83,28 @@ export function useSync() {
       // Récupérer les pointages
       const pointagesResult = await getPointagesFromSupabase()
       if (pointagesResult.success && pointagesResult.data) {
-        // Fusionner avec les données locales (éviter les doublons)
+        // Fusionner avec les données locales
         for (const pointage of pointagesResult.data) {
-          const existing = await db.pointages.get(pointage.id)
-          if (!existing) {
-            await db.pointages.add({
-              id: pointage.id,
-              timestamp: pointage.timestamp,
-              date: pointage.date
-            })
-          }
+          await upsertPointageInCache({
+            id: pointage.id,
+            timestamp: pointage.timestamp,
+            date: pointage.date
+          })
         }
+        notifyPointagesChanged()
+        dispatchCustomEvent(CUSTOM_EVENTS.POINTAGE_UPDATED)
       }
 
       // Récupérer les settings
       const settingsResult = await getSettingsFromSupabase()
       if (settingsResult.success && settingsResult.data) {
         for (const setting of settingsResult.data) {
-          await db.settings.put({
+          await upsertSettingInCache({
             key: setting.key,
             value: setting.value
           })
         }
+        dispatchCustomEvent(CUSTOM_EVENTS.SETTING_UPDATED)
       }
 
       lastSyncDate.value = new Date()

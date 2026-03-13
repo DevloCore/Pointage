@@ -123,7 +123,7 @@ await syncFromCloud()
 
 ## 📱 Mode hors ligne
 
-L'application fonctionne **toujours en mode hors ligne** grâce à Dexie (IndexedDB). 
+L'application fonctionne **toujours en mode hors ligne** grâce au cache local persistant.
 
 - Sans Supabase configuré : tout fonctionne localement
 - Avec Supabase : sync automatique quand vous êtes en ligne
@@ -146,7 +146,7 @@ USING (auth.uid() = user_id);
 ## 🐛 Dépannage
 
 ### "Supabase non configuré"
-→ Vérifiez que le fichier `.env` existe et contient les bonnes valeurs
+→ Vérifiez que l'URL et la clé anon sont bien renseignées dans l'onglet **Paramètres**
 
 ### Erreurs de synchronisation
 → Vérifiez dans la console du navigateur (F12) les messages d'erreur détaillés
