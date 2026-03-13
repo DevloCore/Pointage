@@ -32,7 +32,7 @@ watch(() => route.path, (to, from) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 pb-20 transition-colors">
+  <div class="app-shell min-h-dvh bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 pb-20 transition-colors">
     <ToastContainer />
     
     <router-view v-slot="{ Component, route: currentRoute }">
@@ -61,11 +61,22 @@ watch(() => route.path, (to, from) => {
 </template>
 
 <style scoped>
+.app-shell {
+  position: relative;
+  overflow-x: clip;
+}
+
+nav {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
+  will-change: opacity, transform;
 }
 
 .slide-left-enter-from {
